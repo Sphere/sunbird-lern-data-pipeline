@@ -8,7 +8,9 @@ import org.apache.flink.configuration.Configuration
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction
 import org.slf4j.LoggerFactory
 import org.sunbird.incredible.processor.CertModel
-import org.sunbird.incredible.{CertificateConfig, ScalaModuleJsonUtils}
+import org.sunbird.incredible.processor.views.SvgGenerator
+import org.sunbird.incredible.pojos.ob.CertificateExtension
+import org.sunbird.incredible.{CertificateConfig, CertificateGenerator, ScalaModuleJsonUtils}
 import org.sunbird.job.certgen.domain._
 import org.sunbird.job.certgen.exceptions.ServerException
 import org.sunbird.job.certgen.task.CertificateGeneratorConfig
@@ -130,6 +132,12 @@ class CertificateGeneratorFunction(config: CertificateGeneratorConfig, httpUtil:
     val replacedUrl = if(event.svgTemplate.contains(config.cloudStoreBasePathPlaceholder)) event.svgTemplate.replace(config.cloudStoreBasePathPlaceholder, config.baseUrl+"/"+config.contentCloudStorageContainer) else event.svgTemplate
     logger.info("generateRequest: template url from event {}", event.svgTemplate)
     logger.info("generateRequest: template url after replacing placeholder {}", replacedUrl)
+    // Pre-render the SVG here (fills ${recipientName}/${courseName}/${maxScore}/${rmNumber}/${issuedDate}/${qrCodeImage}
+    // etc. via VarResolver#getCertMetaData) and send it as `printUri`. The RC certificate-api otherwise re-renders
+    // the raw templateUrl from a thin credential (recipientName/trainingName/trainingId only) and leaves the
+    // template variables unsubstituted. Rendering here is fail-safe: on any error it returns "" and the request
+    // falls back to the previous templateUrl-only behaviour.
+    val printUri: String = generatePrintUri(certModel, replacedUrl)
     val createCertReq = Map[String, AnyRef](
       "certificateLabel" -> certModel.certificateName,
       "status" -> "ACTIVE",
@@ -138,8 +146,43 @@ class CertificateGeneratorFunction(config: CertificateGeneratorConfig, httpUtil:
       "recipient" -> Recipient(certModel.identifier, certModel.recipientName, null),
       "issuer" -> Issuer(certModel.issuer.url, certModel.issuer.name, publicKeyId),
       "signatory" -> event.signatoryList,
-    ) ++ {if (reIssue) Map[String, AnyRef](config.OLD_ID -> event.oldId) else Map[String, AnyRef]()}
+    ) ++ {if (StringUtils.isNotBlank(printUri)) Map[String, AnyRef]("printUri" -> printUri) else Map[String, AnyRef]()} ++
+      {if (reIssue) Map[String, AnyRef](config.OLD_ID -> event.oldId) else Map[String, AnyRef]()}
     createCertReq
+  }
+
+  /**
+   * Renders the certificate SVG on the generator side, substituting every template variable
+   * (`${recipientName}`, `${courseName}`, `${maxScore}`, `${rmNumber}`, `${issuedDate}`, `${qrCodeImage}`, ...)
+   * from the CertModel via VarResolver#getCertMetaData. Returns the fully-resolved SVG (data-uri) to be stored
+   * as the certificate `printUri`. Any failure is swallowed and returns "" so the RC create request degrades to
+   * the previous templateUrl-only behaviour.
+   */
+  def generatePrintUri(certModel: CertModel, templateUrl: String): String = {
+    try {
+      val certGenerator = new CertificateGenerator()
+      val certExtension: CertificateExtension = certGenerator.getCertificateExtension(certModel)
+      val uuid: String = Option(certGenerator.getUUID(certExtension)).filter(StringUtils.isNotBlank).getOrElse(java.util.UUID.randomUUID().toString)
+      val encodedQr: String = try {
+        val directory = "conf/" + uuid + "/"
+        val qrModel = certGenerator.generateQrCode(uuid, directory, certModel.issuer.url)
+        val bytes = java.nio.file.Files.readAllBytes(qrModel.qrFile.toPath)
+        val encoded = java.util.Base64.getEncoder.encodeToString(bytes)
+        try { qrModel.qrFile.delete() } catch { case _: Throwable => }
+        encoded
+      } catch {
+        case ex: Throwable =>
+          logger.warn("CertificateGeneratorFunction:: generatePrintUri:: QR generation failed, rendering without QR :: " + ex.getMessage)
+          ""
+      }
+      val svg = SvgGenerator.generate(certExtension, encodedQr, templateUrl)
+      logger.info("CertificateGeneratorFunction:: generatePrintUri:: printUri rendered for recipient: " + certModel.recipientName)
+      svg
+    } catch {
+      case ex: Throwable =>
+        logger.error("CertificateGeneratorFunction:: generatePrintUri:: failed to render printUri, falling back to RC render :: " + ex.getMessage, ex)
+        ""
+    }
   }
 
   @throws[ServerException]
