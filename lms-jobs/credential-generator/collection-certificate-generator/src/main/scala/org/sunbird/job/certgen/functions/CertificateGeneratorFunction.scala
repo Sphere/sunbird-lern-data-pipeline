@@ -24,6 +24,8 @@ import java.util.stream.Collectors
 import java.util.Date
 import scala.collection.JavaConverters._
 
+case class PrintUriResult(printUri: String, accessCode: String)
+
 class CertificateGeneratorFunction(config: CertificateGeneratorConfig, httpUtil: HttpUtil, @transient var cassandraUtil: CassandraUtil = null)
   extends BaseProcessKeyedFunction[String, Event, String](config) {
 
@@ -93,9 +95,24 @@ class CertificateGeneratorFunction(config: CertificateGeneratorConfig, httpUtil:
         }
       }
       val related = event.related
-      val certReq = generateRequest(event, certModel, reIssue)
+      val replacedUrl: String = if (event.svgTemplate.contains(config.cloudStoreBasePathPlaceholder)) event.svgTemplate.replace(config.cloudStoreBasePathPlaceholder, config.baseUrl + "/" + config.contentCloudStorageContainer) else event.svgTemplate
+      // Render the certificate SVG once (fills ${recipientName}/${issuedDate}/${qrCodeImage}/... via VarResolver)
+      // and reuse it for both the RC create request and the cert_registry (old-format) write below.
+      val printUriResult: PrintUriResult = generatePrintUri(certModel, replacedUrl)
+      val certReq = generateRequest(event, certModel, reIssue, replacedUrl, printUriResult.printUri)
       //make api call to registry
       uuid = callCertificateRc(config.rcCreateApi, null, certReq)
+      // Old-format store: also write the rendered certificate into sunbird.cert_registry (via cert-registry
+      // /certs/v2/registry/add) so download (cert-registry downloadV2 Branch 1) serves the filled printUri
+      // instead of re-rendering the raw template. Non-fatal: a registry-write failure must not block issuance.
+      if (StringUtils.isNotBlank(printUriResult.printUri)) {
+        try {
+          addCertToRegistry(event, certModel, uuid, printUriResult)
+        } catch {
+          case ex: Throwable =>
+            logger.error("CertificateGeneratorFunction:: generateCertificateUsingRC:: cert_registry add failed for id " + uuid + " :: " + ex.getMessage, ex)
+        }
+      }
       val userEnrollmentData = UserEnrollmentData(related.getOrElse(config.BATCH_ID, "").asInstanceOf[String], certModel.identifier,
         related.getOrElse(config.COURSE_ID, "").asInstanceOf[String], event.courseName, event.templateId,
         Certificate(uuid, event.name, "", formatter.format(new Date()), event.svgTemplate, config.rcEntity))
@@ -126,18 +143,15 @@ class CertificateGeneratorFunction(config: CertificateGeneratorConfig, httpUtil:
     esUtil.deleteDocument(id)
   }
 
-  def generateRequest(event: Event, certModel: CertModel, reIssue: Boolean):  Map[String, AnyRef] = {
+  def generateRequest(event: Event, certModel: CertModel, reIssue: Boolean, replacedUrl: String, printUri: String):  Map[String, AnyRef] = {
     val req = Map("filters" -> Map())
     val publicKeyId: String = callCertificateRc(config.rcSearchApi, null, req)
-    val replacedUrl = if(event.svgTemplate.contains(config.cloudStoreBasePathPlaceholder)) event.svgTemplate.replace(config.cloudStoreBasePathPlaceholder, config.baseUrl+"/"+config.contentCloudStorageContainer) else event.svgTemplate
     logger.info("generateRequest: template url from event {}", event.svgTemplate)
     logger.info("generateRequest: template url after replacing placeholder {}", replacedUrl)
-    // Pre-render the SVG here (fills ${recipientName}/${courseName}/${maxScore}/${rmNumber}/${issuedDate}/${qrCodeImage}
-    // etc. via VarResolver#getCertMetaData) and send it as `printUri`. The RC certificate-api otherwise re-renders
-    // the raw templateUrl from a thin credential (recipientName/trainingName/trainingId only) and leaves the
-    // template variables unsubstituted. Rendering here is fail-safe: on any error it returns "" and the request
-    // falls back to the previous templateUrl-only behaviour.
-    val printUri: String = generatePrintUri(certModel, replacedUrl)
+    // printUri is pre-rendered by the caller via generatePrintUri (fills ${recipientName}/${courseName}/
+    // ${maxScore}/${rmNumber}/${issuedDate}/${qrCodeImage} via VarResolver#getCertMetaData) and passed in so the
+    // same rendered SVG is used for the RC create request and the cert_registry write. On render failure it is
+    // blank and the request falls back to the previous templateUrl-only behaviour.
     val createCertReq = Map[String, AnyRef](
       "certificateLabel" -> certModel.certificateName,
       "status" -> "ACTIVE",
@@ -158,14 +172,16 @@ class CertificateGeneratorFunction(config: CertificateGeneratorConfig, httpUtil:
    * as the certificate `printUri`. Any failure is swallowed and returns "" so the RC create request degrades to
    * the previous templateUrl-only behaviour.
    */
-  def generatePrintUri(certModel: CertModel, templateUrl: String): String = {
+  def generatePrintUri(certModel: CertModel, templateUrl: String): PrintUriResult = {
     try {
       val certGenerator = new CertificateGenerator()
       val certExtension: CertificateExtension = certGenerator.getCertificateExtension(certModel)
       val uuid: String = Option(certGenerator.getUUID(certExtension)).filter(StringUtils.isNotBlank).getOrElse(java.util.UUID.randomUUID().toString)
+      var accessCode: String = ""
       val encodedQr: String = try {
         val directory = "conf/" + uuid + "/"
         val qrModel = certGenerator.generateQrCode(uuid, directory, certModel.issuer.url)
+        accessCode = qrModel.accessCode
         val bytes = java.nio.file.Files.readAllBytes(qrModel.qrFile.toPath)
         val encoded = java.util.Base64.getEncoder.encodeToString(bytes)
         try { qrModel.qrFile.delete() } catch { case _: Throwable => }
@@ -177,11 +193,42 @@ class CertificateGeneratorFunction(config: CertificateGeneratorConfig, httpUtil:
       }
       val svg = SvgGenerator.generate(certExtension, encodedQr, templateUrl)
       logger.info("CertificateGeneratorFunction:: generatePrintUri:: printUri rendered for recipient: " + certModel.recipientName)
-      svg
+      PrintUriResult(svg, accessCode)
     } catch {
       case ex: Throwable =>
         logger.error("CertificateGeneratorFunction:: generatePrintUri:: failed to render printUri, falling back to RC render :: " + ex.getMessage, ex)
-        ""
+        PrintUriResult("", "")
+    }
+  }
+
+  /**
+   * Writes the rendered certificate into the old-format store (sunbird.cert_registry) via cert-registry's
+   * /certs/v2/registry/add API. This makes cert-registry downloadV2 find the record (Branch 1) and return the
+   * stored, filled `printUri` instead of re-rendering the raw templateUrl (which cannot fill the incredible
+   * ${..} placeholders and yields a blank certificate). The printUri is stored inline in `jsonData` so download
+   * reads it directly from the `data` column (jsonUrl left empty).
+   */
+  @throws[ServerException]
+  @throws[UnirestException]
+  def addCertToRegistry(event: Event, certModel: CertModel, id: String, printUriResult: PrintUriResult): Unit = {
+    val jsonData = Map[String, AnyRef]("printUri" -> printUriResult.printUri)
+    val addReq = Map[String, AnyRef]("request" -> Map[String, AnyRef](
+      "id" -> id,
+      "jsonData" -> jsonData,
+      "accessCode" -> printUriResult.accessCode,
+      "recipientName" -> certModel.recipientName,
+      "recipientId" -> certModel.identifier,
+      config.RELATED -> event.related
+    ))
+    val httpRequest = removeBadChars(ScalaModuleJsonUtils.serialize(addReq))
+    val url = config.certRegistryBaseUrl + config.addCertRegApi
+    logger.info("CertificateGeneratorFunction:: addCertToRegistry:: adding certificate to cert_registry for id: " + id)
+    val httpResponse = httpUtil.post(url, httpRequest)
+    if (httpResponse.status == 200) {
+      logger.info("CertificateGeneratorFunction:: addCertToRegistry:: certificate added to cert_registry for id: " + id)
+    } else {
+      logger.error("CertificateGeneratorFunction:: addCertToRegistry:: failed for id: " + id + " :: status " + httpResponse.status + " :: " + httpResponse.body)
+      throw ServerException("ERR_API_CALL", "cert_registry add failed for id: " + id + " | Status is: " + httpResponse.status)
     }
   }
 
