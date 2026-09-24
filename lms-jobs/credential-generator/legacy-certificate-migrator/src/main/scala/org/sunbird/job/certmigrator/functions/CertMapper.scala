@@ -36,8 +36,19 @@ class CertMapper(certConfig: CertificateConfig) {
       criteria = getCriteria(certReq.criteria),
       keyId = certReq.keys.getOrElse(JsonKeys.ID, ""),
       tag = certReq.tag,
-      expiry = Option.apply(expiryDate)
-    )
+      expiry = Option.apply(expiryDate),
+        rmNumber = certReq.rmNumber,
+        orgName = certReq.orgName,
+        country = certReq.country,
+        state = certReq.state,
+        district = certReq.district,
+        block = certReq.block,
+        designation = certReq.designation,
+        facilityName = certReq.facilityName,
+        nin = certReq.nin,
+        providerName = certReq.providerName,
+        maxScore = certReq.maxScore
+      )
   }
 
   private def getCurrentDate: String = {
