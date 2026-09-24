@@ -16,7 +16,7 @@ import org.sunbird.job.Metrics
 import org.sunbird.job.certgen.domain._
 import org.sunbird.job.certgen.exceptions.ServerException
 import org.sunbird.job.certgen.fixture.EventFixture
-import org.sunbird.job.certgen.functions.{CertMapper, CertificateGeneratorFunction}
+import org.sunbird.job.certgen.functions.{CertMapper, CertificateGeneratorFunction, PrintUriResult}
 import org.sunbird.job.certgen.task.CertificateGeneratorConfig
 import org.sunbird.job.util._
 import org.sunbird.spec.BaseTestSpec
@@ -132,6 +132,24 @@ class CertificateGeneratorFunctionTest extends BaseTestSpec {
 
   }
 
+
+  "addCertToRegistry with a valid request " should " not throw exception and post to the cert_registry add api " in {
+    val event = new Event(JSONUtil.deserialize[java.util.Map[String, Any]](EventFixture.EVENT_3), 0, 0)
+    val certModel: CertModel = new CertMapper(certificateConfig).mapReqToCertModel(event).head
+    when(mockHttpUtil.post(any[String], any[String], any[Map[String, String]]())).thenReturn(HTTPResponse(200, """{"id":"api.certs.registry.add","ver":"v2","responseCode":"OK","result":{"id":"c96d60f8-9c76-4a73-9ef0-9e01d0f726c6"}}"""))
+    noException should be thrownBy {
+      new CertificateGeneratorFunction(jobConfig, mockHttpUtil, cassandraUtil).addCertToRegistry(event, certModel, "validId", PrintUriResult("data:image/svg+xml,%3Csvg%3E%3C/svg%3E", "ABC123"))
+    }
+  }
+
+  "addCertToRegistry when cert-registry returns non 200 " should " throw ServerException " in {
+    val event = new Event(JSONUtil.deserialize[java.util.Map[String, Any]](EventFixture.EVENT_3), 0, 0)
+    val certModel: CertModel = new CertMapper(certificateConfig).mapReqToCertModel(event).head
+    when(mockHttpUtil.post(any[String], any[String], any[Map[String, String]]())).thenReturn(HTTPResponse(500, """{}"""))
+    an [ServerException] should be thrownBy {
+      new CertificateGeneratorFunction(jobConfig, mockHttpUtil, cassandraUtil).addCertToRegistry(event, certModel, "validId", PrintUriResult("data:image/svg+xml,%3Csvg%3E%3C/svg%3E", "ABC123"))
+    }
+  }
 
   private def generateRequest(event: Event, kid: String):  Map[String, AnyRef] = {
     val certModel: CertModel = new CertMapper(certificateConfig).mapReqToCertModel(event).head
