@@ -53,11 +53,23 @@ class Event(eventMap: java.util.Map[String, Any], partition: Int, offset: Long) 
   def certificateDescription: String = readOrDefault[String]("edata.description", "")
 
   def related: Map[String, AnyRef] = readOrDefault[Map[String, AnyRef]]("edata.related", Map[String, AnyRef]())
-  
+
   def batchId: String = related.getOrElse("batchId", "").asInstanceOf[String]
 
   def courseId: String = related.getOrElse("courseId", "").asInstanceOf[String]
-  
+
   def userId: String = readOrDefault[String]("edata.userId", "")
 
+  // Aastrika specific
+  def rmNumber: String = readOrDefault[String]("edata.rmNumber", "")
+  def orgName: String = readOrDefault[String]("edata.orgName", "")
+  def country: String = readOrDefault[String]("edata.country", "")
+  def state: String = readOrDefault[String]("edata.state", "")
+  def district: String = readOrDefault[String]("edata.district", "")
+  def block: String = readOrDefault[String]("edata.block", "")
+  def designation: String = readOrDefault[String]("edata.designation", "")
+  def facilityName: String = readOrDefault[String]("edata.facilityName", "")
+  def nin: String = readOrDefault[String]("edata.nin", "")
+  def providerName: String = readOrDefault[String]("edata.providerName", "")
+  def maxScore: String = readOrDefault("edata.maxScore", "")
 }
