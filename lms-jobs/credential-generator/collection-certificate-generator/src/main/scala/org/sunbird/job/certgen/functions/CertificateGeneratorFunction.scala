@@ -134,8 +134,8 @@ class CertificateGeneratorFunction(config: CertificateGeneratorConfig, httpUtil:
       "certificateLabel" -> certModel.certificateName,
       "status" -> "ACTIVE",
       "templateUrl" -> replacedUrl,
-      "training" -> Training(event.related.getOrElse(config.COURSE_ID, "").asInstanceOf[String], event.courseName, "Course", event.related.getOrElse(config.BATCH_ID, "").asInstanceOf[String]),
-      "recipient" -> Recipient(certModel.identifier, certModel.recipientName, null),
+      "training" -> Training(event.related.getOrElse(config.COURSE_ID, "").asInstanceOf[String], event.courseName, "Course", event.related.getOrElse(config.BATCH_ID, "").asInstanceOf[String], certModel.maxScore),
+      "recipient" -> Recipient(certModel.identifier, certModel.recipientName, null, certModel.rmNumber, certModel.orgName, certModel.country, certModel.state, certModel.district, certModel.block, certModel.designation, certModel.facilityName, certModel.nin, certModel.providerName),
       "issuer" -> Issuer(certModel.issuer.url, certModel.issuer.name, publicKeyId),
       "signatory" -> event.signatoryList,
     ) ++ {if (reIssue) Map[String, AnyRef](config.OLD_ID -> event.oldId) else Map[String, AnyRef]()}
