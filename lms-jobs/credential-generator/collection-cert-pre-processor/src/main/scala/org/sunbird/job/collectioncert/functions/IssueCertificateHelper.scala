@@ -305,7 +305,9 @@ trait IssueCertificateHelper {
         val postalAddress = Option(personalDetails.getOrElse("postalAddress", "[NA]").asInstanceOf[String]).getOrElse("[NA]")
         if(!postalAddress.isBlank) {
             logger.info(s"IssueCertificateHelper:: generateCertificateEvent:: postalAddress :: ${postalAddress} ")
-            address = postalAddress.split(", ")
+            // Profiles store the address both as "India, State, District" and "India,State,District";
+            // splitting on ", " alone put the whole comma-only address into country and left state/district [NA].
+            address = postalAddress.split(",").map(_.trim).filter(_.nonEmpty)
             if (!address.isEmpty && !address.equals("[NA]")) {
                 country = address.lift(0).getOrElse("[NA]")
                 state = address.lift(1).getOrElse("[NA]")
@@ -316,7 +318,9 @@ trait IssueCertificateHelper {
             }
         }
         val regNurseRegMidwifeNumber = Option(personalDetails.getOrElse("regNurseRegMidwifeNumber", "[NA]").asInstanceOf[String]).getOrElse("[NA]")
-        val maxScore = getLastAssessmentScore(event.courseId, event.userId)(metrics, cassandraUtil, config, cache, httpUtil)
+        // getLastAssessmentScore returns Option[String]; putting the Option itself into eData printed "None"
+        // (or "Some(..)") on the certificate. Unwrap it, defaulting to [NA] like every other Aastrika field.
+        val maxScore = getLastAssessmentScore(event.courseId, event.userId)(metrics, cassandraUtil, config, cache, httpUtil).getOrElse("[NA]")
         val providerName = getCourseOrganisation(event.courseId)(metrics, config, cache, httpUtil)
         // Aastrika specific end
 
