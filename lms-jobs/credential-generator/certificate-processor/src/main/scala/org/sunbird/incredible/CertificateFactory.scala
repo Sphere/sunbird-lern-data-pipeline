@@ -48,7 +48,8 @@ object CertificateFactory {
       issuedOn = certModel.issuedDate,
       expires = certModel.expiry.orNull,
       validFrom = certModel.validFrom.orNull,
-      signatory = certModel.signatoryList)
+      signatory = certModel.signatoryList,
+      providerName = certModel.providerName)
     if (StringUtils.isNotEmpty(certModel.courseName)) {
       val trainingEvidence: TrainingEvidence = TrainingEvidence(certificateConfig.contextUrl,
         id = certificateConfig.evidenceUrl,
@@ -67,6 +68,49 @@ object CertificateFactory {
       val signature: Signature = Signature(created = Instant.now.toString, creator = basePath.concat("/").concat(certModel.keyId).concat(JsonKeys.PUBLIC_KEY_URL), signatureValue = signatureValue)
       certificateExtension.signature = Option.apply(signature)
     }
+
+    // Aastrika specific start
+    if (StringUtils.isNotEmpty(certModel.rmNumber)) {
+      certificateExtension.rmNumber = Option.apply(certModel.rmNumber)
+    }
+
+    if (StringUtils.isNotEmpty(certModel.orgName)) {
+      certificateExtension.orgName = Option.apply(certModel.orgName)
+    }
+
+    if (StringUtils.isNotEmpty(certModel.country)) {
+      certificateExtension.country = Option.apply(certModel.country)
+    }
+
+    if (StringUtils.isNotEmpty(certModel.state)) {
+      certificateExtension.state = Option.apply(certModel.state)
+    }
+
+    if (StringUtils.isNotEmpty(certModel.district)) {
+      certificateExtension.district = Option.apply(certModel.district)
+    }
+
+    if (StringUtils.isNotEmpty(certModel.block)) {
+      certificateExtension.block = Option.apply(certModel.block)
+    }
+
+    if (StringUtils.isNotEmpty(certModel.designation)) {
+      certificateExtension.designation = Option.apply(certModel.designation)
+    }
+
+    if (StringUtils.isNotEmpty(certModel.facilityName)) {
+      certificateExtension.facilityName = Option.apply(certModel.facilityName)
+    }
+
+    if (StringUtils.isNotEmpty(certModel.nin)) {
+      certificateExtension.nin = Option.apply(certModel.nin)
+    }
+
+    if(StringUtils.isNotEmpty(certModel.maxScore)) {
+      certificateExtension.maxScore = Option.apply(certModel.maxScore)
+    }
+    // Aastrika specific end
+
     certificateExtension
   }
 

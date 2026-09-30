@@ -113,4 +113,16 @@ object JsonKeys {
   val ISSUER_NAME: String = "issuerName"
   val EDATA = "edata"
   val STATE_IMAGE_URL = "stateImageUrl"
+
+  // Aastrika specific
+  val RM_NUMBER: String = "rmNumber"
+  val ORG_NAME: String = "orgName"
+  val COUNTRY: String = "country"
+  val STATE: String = "state"
+  val DISTRICT: String = "district"
+  val BLOCK: String = "block"
+  val FACILITY_NAME: String = "facilityName"
+  val NIN: String = "nin"
+  val PROVIDER_NAME: String = "providerName"
+  val MAX_SCORE: String = "maxScore"
 }

@@ -67,6 +67,19 @@ class VarResolver(certificateExtension: CertificateExtension) {
 
   def getIssuerName: String = certificateExtension.badge.issuer.name
 
+  // Aastrika specific
+  def getRmNumber: String = certificateExtension.rmNumber.getOrElse("")
+  def getOrgName: String = certificateExtension.orgName.getOrElse("")
+  def getCountry: String = certificateExtension.country.getOrElse("")
+  def getState: String = certificateExtension.state.getOrElse("")
+  def getDistrict: String = certificateExtension.district.getOrElse("")
+  def getBlock: String = certificateExtension.block.getOrElse("")
+  def getDesignation: String = certificateExtension.designation.getOrElse("")
+  def getFacilityName: String = certificateExtension.facilityName.getOrElse("")
+  def getNIN: String = certificateExtension.nin.getOrElse("")
+  def getProviderName: String = certificateExtension.providerName
+  def getMaxScore: String = certificateExtension.maxScore.getOrElse("")
+
   @throws[UnsupportedEncodingException]
   def getCertMetaData: java.util.Map[String, String] = {
 
@@ -84,6 +97,19 @@ class VarResolver(certificateExtension: CertificateExtension) {
         put(JsonKeys.SIGNATORY_1_DESIGNATION, urlEncode(getSignatory1Designation))
         put(JsonKeys.EXPIRY_DATE, urlEncode(getExpiryDate))
         put(JsonKeys.ISSUER_NAME, urlEncode(getIssuerName))
+
+        // Aastrika specific
+        put(JsonKeys.RM_NUMBER, urlEncode(getRmNumber))
+        put(JsonKeys.ORG_NAME, urlEncode(getOrgName))
+        put(JsonKeys.COUNTRY, urlEncode(getCountry))
+        put(JsonKeys.STATE, urlEncode(getState))
+        put(JsonKeys.DISTRICT, urlEncode(getDistrict))
+        put(JsonKeys.BLOCK, urlEncode(getBlock))
+        put(JsonKeys.DESIGNATION, urlEncode(getDesignation))
+        put(JsonKeys.FACILITY_NAME, urlEncode(getFacilityName))
+        put(JsonKeys.NIN, urlEncode(getNIN))
+        put(JsonKeys.PROVIDER_NAME, urlEncode(getProviderName))
+        put(JsonKeys.MAX_SCORE, urlEncode(getMaxScore))
       }
     }
     metaData

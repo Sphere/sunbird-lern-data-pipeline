@@ -152,6 +152,16 @@ class CertificateGeneratorFunction(config: CertificateGeneratorConfig, httpUtil:
     esUtil.deleteDocument(id)
   }
 
+  // Same parse and output format as the legacy VarResolver.getIssuedDate, so a certificate reads
+  // "10 September 2026" as it did on the pre-Spark flow. Empty on an unparseable date, as there.
+  def displayDate(issuedDate: String): String =
+    try {
+      val parsed = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'").parse(issuedDate)
+      new SimpleDateFormat("dd MMMM yyyy", java.util.Locale.ENGLISH).format(parsed)
+    } catch {
+      case _: Exception => ""
+    }
+
   def generateRequest(event: Event, certModel: CertModel):  Map[String, AnyRef] = {
     val req = Map("filters" -> Map())
     val publicKeyId: String = callCertificateRc(config.rcPKSearchApi, null, req)
@@ -162,8 +172,8 @@ class CertificateGeneratorFunction(config: CertificateGeneratorConfig, httpUtil:
       "certificateLabel" -> certModel.certificateName,
       "status" -> "ACTIVE",
       "templateUrl" -> replacedUrl,
-      "training" -> Training(event.related.getOrElse(config.COURSE_ID, "").asInstanceOf[String], event.courseName, "Course", event.related.getOrElse(config.BATCH_ID, "").asInstanceOf[String]),
-      "recipient" -> Recipient(certModel.identifier, certModel.recipientName, "user"),
+      "training" -> Training(event.related.getOrElse(config.COURSE_ID, "").asInstanceOf[String], event.courseName, "Course", event.related.getOrElse(config.BATCH_ID, "").asInstanceOf[String], certModel.maxScore, displayDate(certModel.issuedDate)),
+      "recipient" -> Recipient(certModel.identifier, certModel.recipientName, "user", certModel.rmNumber, certModel.orgName, certModel.country, certModel.state, certModel.district, certModel.block, certModel.designation, certModel.facilityName, certModel.nin, certModel.providerName),
       "issuer" -> Issuer(certModel.issuer.url, certModel.issuer.name, publicKeyId),
       "signatory" -> event.signatoryList,
       "issuedOn" -> event.issuedDate,

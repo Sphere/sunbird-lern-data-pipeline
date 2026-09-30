@@ -76,11 +76,12 @@ class CertificateGeneratorStreamTask(config: CertificateGeneratorConfig, kafkaCo
       .uid("notifier")
       .setParallelism(config.notifierParallelism)
 
-    processStreamTask.getSideOutput(config.userFeedOutputTag)
-      .process(new CreateUserFeedFunction(config, httpUtil))
-      .name("user-feed")
-      .uid("user-feed")
-      .setParallelism(config.userFeedParallelism)
+    // Aastrika specific - not needed.
+//    processStreamTask.getSideOutput(config.userFeedOutputTag)
+//      .process(new CreateUserFeedFunction(config, httpUtil))
+//      .name("user-feed")
+//      .uid("user-feed")
+//      .setParallelism(config.userFeedParallelism)
   }
 
 }

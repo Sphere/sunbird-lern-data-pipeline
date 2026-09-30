@@ -87,4 +87,9 @@ class CollectionCertPreProcessorConfig(override val config: Config) extends Base
     val contentCloudStorageContainer = config.getString("content_cloud_storage_container")
     val cnameUrl = config.getString("cloud_storage_cname_url")
     val baseUrl = if(cnameUrl.isEmpty) cloudStoreBasePath else cnameUrl
+
+    // Aastrika specific start
+    val userAssessmentSummaryKeyspace: String = config.getString("user-assessment-summary.keyspace")
+    val userAssessmentSummaryTable: String = config.getString("user-assessment-summary.table")
+    val collectionHierarchyReadApi = config.getString("collection_hierarchy_read_api")
 }
