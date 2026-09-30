@@ -141,7 +141,7 @@ class CertificateGeneratorFunctionTest extends BaseTestSpec {
       "certificateLabel" -> certModel.certificateName,
       "status" -> "ACTIVE",
       "templateUrl" -> event.svgTemplate,
-      "training" -> Training(related.getOrElse(jobConfig.COURSE_ID, "").asInstanceOf[String], event.courseName, "Course", related.getOrElse(jobConfig.BATCH_ID, "").asInstanceOf[String], certModel.maxScore),
+      "training" -> Training(related.getOrElse(jobConfig.COURSE_ID, "").asInstanceOf[String], event.courseName, "Course", related.getOrElse(jobConfig.BATCH_ID, "").asInstanceOf[String], certModel.maxScore, new CertificateGeneratorFunction(jobConfig, mockHttpUtil, cassandraUtil).displayDate(certModel.issuedDate)),
       "recipient" -> Recipient(certModel.identifier, certModel.recipientName, null, certModel.rmNumber, certModel.orgName, certModel.country, certModel.state, certModel.district, certModel.block, certModel.designation, certModel.facilityName, certModel.nin, certModel.providerName),
       "issuer" -> Issuer(certModel.issuer.url, certModel.issuer.name, kid),
       "signatory" -> event.signatoryList,

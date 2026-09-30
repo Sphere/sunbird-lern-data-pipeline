@@ -319,8 +319,9 @@ trait IssueCertificateHelper {
         }
         val regNurseRegMidwifeNumber = Option(personalDetails.getOrElse("regNurseRegMidwifeNumber", "[NA]").asInstanceOf[String]).getOrElse("[NA]")
         // getLastAssessmentScore returns Option[String]; putting the Option itself into eData printed "None"
-        // (or "Some(..)") on the certificate. Unwrap it, defaulting to [NA] like every other Aastrika field.
-        val maxScore = getLastAssessmentScore(event.courseId, event.userId)(metrics, cassandraUtil, config, cache, httpUtil).getOrElse("[NA]")
+        // (or "Some(..)") on the certificate. Unwrap it, defaulting to empty: the templates print it after a fixed
+        // "securing" label at a larger font, so "[NA]" stood out where prod certificates simply leave it blank.
+        val maxScore = getLastAssessmentScore(event.courseId, event.userId)(metrics, cassandraUtil, config, cache, httpUtil).getOrElse("")
         val providerName = getCourseOrganisation(event.courseId)(metrics, config, cache, httpUtil)
         // Aastrika specific end
 

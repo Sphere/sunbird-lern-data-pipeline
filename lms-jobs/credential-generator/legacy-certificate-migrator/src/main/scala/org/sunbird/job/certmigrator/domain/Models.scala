@@ -66,5 +66,7 @@ case class Recipient(id: String, name: String, `type`: String,
                      country: String, state: String, district: String, block: String,
                      designation: String, facilityName: String, nin: String,
                      providerName: String)
-case class Training(id: String, name: String, `type`: String, batchId: String, maxScore: String)
+// issuedDate is the display date, pre-formatted like the legacy VarResolver ("10 September 2026"):
+// sunbird-rc only holds the raw osCreatedAt timestamp, and templates map fields without formatting.
+case class Training(id: String, name: String, `type`: String, batchId: String, maxScore: String, issuedDate: String)
 case class Issuer(url: String, name: String, kid: String)
