@@ -1,5 +1,4 @@
 
-// Runs Maven inside a container instead of needing it on the agent
 def mvn(String args) {
     sh """
         mkdir -p "\$WORKSPACE/.build-home/.m2"
@@ -24,8 +23,8 @@ node {
     if (!imageRepo) { error 'IMAGE_REPO parameter is required' }
 
     try {
-        stage('Checkout') {
-           
+        stage('Checkout') {            
+
             // Uses the repo + branch from the job's SCM config (Branch Specifier: */${BRANCH})
             checkout scm
 
@@ -40,27 +39,37 @@ node {
             mvn('clean install -DskipTests -Paws')
         }
 
-        stage('maven packgae build') {
-            sh "cd jobs-distribution/"
-            mvn('clean package -DskipTests -Paws')
+        stage('Package Jobs Distribution') {
+            dir('jobs-distribution') {
+                // Creates target/jobs-distribution-1.0.tar.gz
+                mvn('clean package -DskipTests -Paws')
+            }
         }
 
         stage('Docker Build') {
-            sh "cd jobs-distribution && docker build --target aws -t ${imageRepo}/${imageName}:${env.IMAGE_TAG} ."
-           sh """echo '{"image_name" : "${imageName}", "image_tag" : "${env.IMAGE_TAG}"}' > metadata.json"""      
+            dir('jobs-distribution') {
+                sh "docker build --target aws -t ${imageRepo}:${env.IMAGE_TAG} ."
+            }
         }
 
-         stage('ArchiveArtifacts') {
-                    
-                    archiveArtifacts "metadata.json"
-                    currentBuild.description = "${imageRepo}:${env.IMAGE_TAG}"
+        stage('Metadata') {
+            def imageName = imageRepo.tokenize('/').last()
+            writeFile file: 'metadata.json',
+                      text: """{"image_name" : "${imageName}", "image_tag" : "${env.IMAGE_TAG}"}"""
+            archiveArtifacts artifacts: 'metadata.json'
+        }
 
-                }
         currentBuild.result = 'SUCCESS'
+        currentBuild.description = "${imageRepo}:${env.IMAGE_TAG}"
 
     } catch (err) {
         currentBuild.result = 'FAILURE'
         echo "Build failed: ${err}"
         throw err
-    } 
+    } finally {
+        stage('Cleanup') {
+            // Remove the local image to save disk space; keep the agent's Docker Hub login
+            sh "docker rmi ${imageRepo}:${env.IMAGE_TAG} || true"
+        }
     }
+}
