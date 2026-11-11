@@ -46,8 +46,7 @@ node {
         }
 
         stage('Docker Build') {
-            sh "cd jobs-distribution/"
-            sh "docker build --target aws -t ${imageRepo}/${imageName}:${env.IMAGE_TAG} ."
+            sh "cd jobs-distribution && docker build --target aws -t ${imageRepo}/${imageName}:${env.IMAGE_TAG} ."
            sh """echo '{"image_name" : "${imageName}", "image_tag" : "${env.IMAGE_TAG}"}' > metadata.json"""      
         }
 
