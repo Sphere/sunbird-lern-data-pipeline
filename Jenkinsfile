@@ -66,10 +66,5 @@ node {
         currentBuild.result = 'FAILURE'
         echo "Build failed: ${err}"
         throw err
-    } finally {
-        stage('Cleanup') {
-            // Remove the local image to save disk space; keep the agent's Docker Hub login
-            sh "docker rmi ${imageRepo}:${env.IMAGE_TAG} || true"
-        }
-    }
+    } 
 }
